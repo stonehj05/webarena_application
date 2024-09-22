@@ -154,49 +154,7 @@
 
     </div>
 
-<script>
-    let commandWindow;
-
-    // Automatically open the command window when the page loads
-    window.onload = function() {
-        commandWindow = window.open('', 'Command Window', 'width=400,height=300');
-        
-        // Write the basic structure of the command window
-        commandWindow.document.write(`
-            <html>
-            <head><title>Command Interface</title></head>
-            <body>
-                <h2>Send Command</h2>
-                <input type="text" id="commandInput" placeholder="Enter command">
-                <button id="sendButton">Send</button>
-            </body>
-            </html>
-        `);
-
-        // After the document is ready, we attach the script dynamically
-        commandWindow.document.close();  // Important to close the document for DOM manipulation
-        commandWindow.document.getElementById('sendButton').onclick = function() {
-            const command = commandWindow.document.getElementById('commandInput').value;
-            // Use postMessage to communicate with the main window
-            window.postMessage(command, '*');
-        };
-    };
-
-    // Listen for messages from the command window
-    window.addEventListener('message', function(event) {
-        const command = event.data;
-        // Handle the command, e.g., modify a card
-        if (command === 'highlight') {
-            document.querySelector('.card').style.border = '5px solid red';
-        } else if (command === 'changeText') {
-            document.querySelector('.card h2').innerText = 'Updated Title';
-        } else if (command === 'redirectToReddit') {
-                window.location.href = 'https://www.reddit.com/';
-        } else if (command == 'calculator') {
-            window.location.href = 'calculator.html';
-        }
-    });
-</script>
+<script src="/static/js/task.js"></script>
 </body>
 
 </html>

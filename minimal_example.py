@@ -6,30 +6,31 @@ import os
 import re
 import subprocess
 import time
+from PIL import Image
 
 SLEEP = 1.5
 # set the URLs of each website, we use the demo sites as an example
 os.environ[
     "SHOPPING"
-] = "http://ec2-3-131-244-37.us-east-2.compute.amazonaws.com:7770"
+] = "http://localhost:7770"
 os.environ[
     "SHOPPING_ADMIN"
-] = "http://ec2-3-131-244-37.us-east-2.compute.amazonaws.com:7780/admin"
+] = "http://localhost:7780/admin"
 os.environ[
     "REDDIT"
-] = "http://ec2-3-131-244-37.us-east-2.compute.amazonaws.com:9999"
+] = "http://localhost:9999"
 os.environ[
     "GITLAB"
-] = "http://ec2-3-131-244-37.us-east-2.compute.amazonaws.com:8023"
+] = "http://localhost:8023"
 os.environ[
     "MAP"
-] = "http://ec2-3-131-244-37.us-east-2.compute.amazonaws.com:3000"
+] = "http://localhost:3000"
 os.environ[
     "WIKIPEDIA"
-] = "http://ec2-3-131-244-37.us-east-2.compute.amazonaws.com:8888/wikipedia_en_all_maxi_2022-05/A/User:The_other_Kiwix_guy/Landing"
+] = "http://localhost:8888/wikipedia_en_all_maxi_2022-05/A/User:The_other_Kiwix_guy/Landing"
 os.environ[
     "HOMEPAGE"
-] = "PASS"  # The home page is not currently hosted in the demo site
+] = "http://localhost:4399"  # The home page is not currently hosted in the demo site
 print("Done setting up URLs")
 
 # First, run `python scripts/generate_test_data.py` to generate the config files
@@ -70,7 +71,7 @@ from evaluation_harness.evaluators import evaluator_router
 
 # Init the environment
 env = ScriptBrowserEnv(
-    headless=False,
+    headless=True,
     slow_mo=100,
     observation_type="accessibility_tree",
     current_viewport_only=True,
@@ -78,7 +79,7 @@ env = ScriptBrowserEnv(
 )
 
 # example 156 as an example
-config_file = "config_files/156.json"
+config_file = "config_files/122.json"
 # maintain a trajectory
 trajectory: Trajectory = []
 
@@ -86,6 +87,12 @@ trajectory: Trajectory = []
 obs, info = env.reset(options={"config_file": config_file})
 actree_obs = obs["text"]
 print(actree_obs)
+
+img_obs = obs["image"]
+# you can save the image as well
+image = Image.fromarray(img_obs)
+image.save('output_filename.png')
+
 
 # You should see some output like this:
 """
@@ -124,7 +131,7 @@ state_info = {"observation": obs, "info": info}
 trajectory.append(state_info)
 
 # Next click "assign to you"
-match = re.search(r"\[(\d+)\] link 'Assigned to you", actree_obs).group(1)
+match = re.search(r"\[(\d+)\] link 'Skip to content", actree_obs).group(1)
 click_action = create_id_based_action(f"click [{match}]")
 trajectory.append(click_action)
 

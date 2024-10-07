@@ -25,9 +25,53 @@ class BrowserController(QObject):
                 viewport_size={"width": 1280, "height": 720},
             )
             self.obs, self.info = self.env.reset(options={"config_file": self.config_file})
-            self.update_signal.emit(f"Browser initialized. Current URL: {self.env.page.url}\n\nObservation:\n{self.obs['text']}")
+
+            welcome_message = "Welcome to Browser Automation Chat!\n\n"
+            welcome_message += "Available actions:\n"
+            welcome_message += "- print: Prints current observation\n"
+            welcome_message += "- click element_text: Click on an element\n"
+            welcome_message += "- hover element_text: Hover over an element\n"
+            welcome_message += "- type element_text [input_text]: Type text into an input field\n"
+            welcome_message += "- scroll up/down: Scroll the page\n"
+            welcome_message += "- press key_combination: Press a key or key combination\n"
+            welcome_message += "- new_tab: Open a new tab\n"
+            welcome_message += "- close_tab: Close the current tab\n"
+            welcome_message += "- goto URL: Navigate to a specific URL\n"
+            welcome_message += "- go_back: Go back to the previous page\n"
+            welcome_message += "- go_forward: Go forward to the next page\n"
+            welcome_message += "- tab_focus tab_number: Focus on a specific tab\n"
+            welcome_message += "- stop answer: Stop the current task with an optional answer\n"
+            self.update_signal.emit(welcome_message)
+            self.update_signal.emit(f"Browser initialized. Current URL: {self.env.page.url}\n")
+
         except Exception as e:
             self.update_signal.emit(f"Error initializing browser: {str(e)}")
+
+    def clean_text(self, text):
+        # Remove non-printable characters and trim whitespace
+        return re.sub(r'[^\x20-\x7E]+', '', text).strip()
+
+    def find_element_id_by_text(self, text):
+        lines = self.obs["text"].split('\n')
+        exact_match = None
+        partial_match = None
+        
+        cleaned_search_text = self.clean_text(text.lower())
+        
+        for line in lines:
+            match = re.search(r'\[(\d+)\]\s+(\w+)\s+\'(.+?)\'', line)
+            if match:
+                element_id, element_type, element_text = match.groups()
+                cleaned_element_text = self.clean_text(element_text.lower())
+                
+                if cleaned_search_text == cleaned_element_text:
+                    exact_match = element_id
+                    break
+                elif cleaned_search_text in cleaned_element_text:
+                    partial_match = element_id
+        
+        return exact_match or partial_match
+
 
     @pyqtSlot(str)
     def perform_action(self, action_text):
@@ -118,34 +162,98 @@ class BrowserController(QObject):
             },
         }
         try:
-            if action_text.startswith("click "):
-                match = re.search(r"\[(\d+)\]", action_text)
-                if match:
-                    element_id = match.group(1)
-                    action = create_id_based_action(f"click [{element_id}]")
-                    
-                    # Get the current URL before the action
-                    before_url = self.env.page.url
-                    
-                    self.obs, reward, terminated, truncated, self.info = self.env.step(action)
-                    
-                    # Get the URL after the action
-                    after_url = self.env.page.url
-                    
-                    # Prepare the feedback message
-                    feedback = f"Clicked element [{element_id}]\n"
-                    feedback += f"Before URL: {before_url}\n"
-                    feedback += f"After URL: {after_url}\n"
-                    feedback += f"Reward: {reward}, Terminated: {terminated}, Truncated: {truncated}\n\n"
-                    feedback += f"New Observation:\n{self.obs['text']}"
-                    
-                    self.update_signal.emit(feedback)
-                else:
-                    self.update_signal.emit("Invalid click command. Use format: click [ID]")
+            if action_text == "print":
+                self.update_signal.emit(f"Observation:\n{self.obs['text']}")
             else:
-                self.update_signal.emit(f"Unknown command: {action_text}")
+                action = self.parse_action(action_text)
+                
+                # Get the current URL before the action
+                before_url = self.env.page.url
+                
+                self.obs, reward, terminated, truncated, self.info = self.env.step(action)
+                
+                # Get the URL after the action
+                after_url = self.env.page.url
+                
+                # Prepare the feedback message
+                feedback = f"Performed action: {action_text}\n"
+                feedback += f"Before URL: {before_url}\n"
+                feedback += f"After URL: {after_url}\n"
+                feedback += f"Reward: {reward}, Terminated: {terminated}, Truncated: {truncated}\n\n"
+                # feedback += f"New Observation:\n{self.obs['text']}"
+                
+                self.update_signal.emit(feedback)
         except Exception as e:
             self.update_signal.emit(f"Error performing action: {str(e)}")
+
+    def parse_action(self, action_text):
+        action_text = action_text.strip().lower()
+        
+        if action_text.startswith("click "):
+            element_text = action_text[6:]
+            element_id = self.find_element_id_by_text(element_text)
+            if element_id:
+                return create_id_based_action(f"click [{element_id}]")
+            else:
+                raise ValueError(f"Element '{element_text}' not found")
+        
+        elif action_text.startswith("hover "):
+            element_text = action_text[6:]
+            element_id = self.find_element_id_by_text(element_text)
+            if element_id:
+                return create_id_based_action(f"hover [{element_id}]")
+            else:
+                raise ValueError(f"Element '{element_text}' not found")
+        
+        elif action_text.startswith("type "):
+            match = re.match(r"type (.*?) \[(.*?)\]", action_text)
+            if match:
+                element_text, input_text = match.groups()
+                element_id = self.find_element_id_by_text(element_text)
+                if element_id:
+                    return create_id_based_action(f"type [{element_id}] [{input_text}]")
+                else:
+                    raise ValueError(f"Element '{element_text}' not found")
+            else:
+                raise ValueError("Invalid type command format: type email [email@address.com]")
+        
+        elif action_text.startswith("scroll "):
+            direction = action_text[7:]
+            if direction in ["up", "down"]:
+                return create_id_based_action(f"scroll [{direction}]")
+            else:
+                raise ValueError("Invalid scroll direction")
+        
+        elif action_text.startswith("press "):
+            key_comb = action_text[6:]
+            return create_id_based_action(f"press [{key_comb}]")
+        
+        elif action_text == "new_tab":
+            return create_id_based_action("new_tab")
+        
+        elif action_text == "close_tab":
+            return create_id_based_action("close_tab")
+        
+        elif action_text.startswith("goto "):
+            url = action_text[5:]
+            return create_id_based_action(f"goto [{url}]")
+        
+        elif action_text == "go_back":
+            return create_id_based_action("go_back")
+        
+        elif action_text == "go_forward":
+            return create_id_based_action("go_forward")
+        
+        elif action_text.startswith("tab_focus "):
+            tab_number = action_text[10:]
+            return create_id_based_action(f"tab_focus [{tab_number}]")
+        
+        elif action_text.startswith("stop "):
+            answer = action_text[5:]
+            return create_stop_action(answer)
+        
+        else:
+            raise ValueError(f"Unknown action: {action_text}")
 
 class BrowserAutomationGUI(QWidget):
     action_signal = pyqtSignal(str)
